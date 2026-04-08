@@ -1,5 +1,6 @@
-from airflow import DAG
-from airflow.operators.bash import BashOperator
+from airflow.decorators import dag, task
+from scripts.load_index_tickers import load_montly_data
+from scripts.daily_ticker_summary import load_daily_data
 from datetime import datetime, timedelta
 
 
@@ -7,32 +8,35 @@ default_args = {
     'owner': 'airflow',
     'depends_on_past': False,
     'start_date': datetime(2024, 1, 1),
-    'retries': 1,
+    'retries': 2,
     'retry_delay': timedelta(minutes=2),
 }
 
-with DAG(
-    'market_daily_quotes',
+@dag(
     default_args=default_args,
     description='Load ticker trade info',
     schedule='0 1 * * *',
-    catchup=False
-) as dag_daily:
+    catchup=False)
+def market_daily_quotes():
+    @task()
+    def run_daily_load():
+        load_daily_data()
 
-    run_daily_script = BashOperator(
-        task_id='run_daily_load',
-        bash_command='python /opt/airflow/dags/daily_ticker_summary.py',
-    )
+    run_daily_load()
 
-with DAG(
-    'market_monthly_tickers',
+
+@dag(
     default_args=default_args,
     description='Monthly company list update',
     schedule='0 0 1 * *',
-    catchup=False
-) as dag_monthly:
+    catchup=False)
+def market_monthly_tickers():
+    @task()
+    def run_load_tickers():
+        load_montly_data()
 
-    run_monthly_script = BashOperator(
-        task_id='run_monthly_load',
-        bash_command='python /opt/airflow/dags/load_index_tickers.py',
-    )
+    run_load_tickers()
+
+
+market_daily_quotes()
+market_monthly_tickers()
