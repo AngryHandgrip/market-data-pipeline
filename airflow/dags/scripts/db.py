@@ -1,10 +1,8 @@
 from sqlalchemy import create_engine, MetaData, Table, Column, String, Boolean, BigInteger, Date, Text, DateTime, Numeric
 from sqlalchemy.dialects.postgresql import JSONB
 import os
-# from dotenv import load_dotenv
 
 
-# load_dotenv()
 def get_engine():
     password = os.getenv('DB_PASSWORD')
     return create_engine(f'postgresql://user:{password}@data-postgres:5432/market_db', echo=True)
