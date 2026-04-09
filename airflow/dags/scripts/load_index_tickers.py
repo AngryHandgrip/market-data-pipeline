@@ -31,14 +31,16 @@ def load_montly_data():
             ticker_details = client.get_ticker_details(ticker)
             start_time = time.time()
 
-            address_dict = {
-                "address1": ticker_details.address.address1,
-                "address2": ticker_details.address.address2,
-                "city": ticker_details.address.city,
-                "state": ticker_details.address.state,
-                "postal_code": ticker_details.address.postal_code,
-                "country": ticker_details.address.country
-            }
+            address_dict = None
+            if ticker_details.address is not None:
+                address_dict = {
+                    "address1": ticker_details.address.address1,
+                    "address2": ticker_details.address.address2,
+                    "city": ticker_details.address.city,
+                    "state": ticker_details.address.state,
+                    "postal_code": ticker_details.address.postal_code,
+                    "country": ticker_details.address.country
+                }
             stmt = insert(dim_companies).values(
                 ticker=ticker_details.ticker,
                 name=ticker_details.name,

@@ -1,6 +1,7 @@
 from scripts.db import dim_companies, fact_stock_prices, get_engine
 import yfinance as yf
 from sqlalchemy import select, join, func
+from sqlalchemy.dialects.postgresql import insert
 import datetime as dt
 
 
@@ -41,7 +42,14 @@ def load_daily_data():
             df_flat.columns = [col.lower() for col in df_flat.columns]
             df_flat = df_flat[['date', 'ticker', 'open', 'high', 'low', 'close', 'volume']]
             df_flat = df_flat.rename(columns={'open': 'open_price', 'high': 'high_price', 'low': 'low_price', 'close': 'close_price'})
-            df_flat.to_sql('fact_stock_prices', con=engine, if_exists='append', index=False, schema='market_data')
+            data = df_flat.to_dict(orient='records')
+
+            stmt = insert(fact_stock_prices).values(data)
+            stmt = stmt.on_conflict_do_nothing(index_elements=['date', 'ticker'])
+        
+        with engine.connect() as conn:
+            conn.execute(stmt)
+            conn.commit()
 
 
 if __name__ == '__main__':
