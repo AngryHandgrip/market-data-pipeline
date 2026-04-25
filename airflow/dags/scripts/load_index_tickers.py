@@ -2,6 +2,7 @@ from scripts.db import dim_companies, get_engine
 from massive import RESTClient
 import pandas as pd
 import requests
+import logging
 from io import StringIO
 import time
 from sqlalchemy import update, cast, Date, func
@@ -10,6 +11,8 @@ import os
 
 def load_montly_data():
     TARGET_INTERVAL = 12
+
+    logger = logging.getLogger(__name__)
 
     api_key = os.getenv('MASSIVE_API_KEY')
 
@@ -23,11 +26,13 @@ def load_montly_data():
     if response.status_code == 200:
         tables = pd.read_html(StringIO(response.text))
         df = tables[0]
-        index_tickets = df['Symbol']
+        index_tickers = df['Symbol'][:5]
+        logger.info('Список тикеров из S&P500 получен')
         engine = get_engine()
 
-        for ticker in index_tickets:
-
+        updated = 0
+        for i, ticker in enumerate(index_tickers):
+            logger.info(f'[{i + 1}/{len(index_tickers)}] Загрузка данных для {ticker}')
             ticker_details = client.get_ticker_details(ticker)
             start_time = time.time()
 
@@ -69,6 +74,10 @@ def load_montly_data():
                 conn.execute(upsert_stmt)
                 conn.commit()
 
+            logger.info(f'Данные по {ticker} загружены')
+
+            updated += 1
+
             elapsed_time = time.time() - start_time
             time_to_wait = TARGET_INTERVAL - elapsed_time
 
@@ -80,11 +89,14 @@ def load_montly_data():
         deactivate_tickers = deactivate_tickers.where(cast(dim_companies.c.updated_at, Date) < func.current_date(),
                                                     dim_companies.c.is_active == True)
         with engine.connect() as conn:
-            conn.execute(deactivate_tickers)
+            result = conn.execute(deactivate_tickers)
             conn.commit()
+            deactivated = result.rowcount
+
+        logger.info(f'Ежемесячное обновление завершено: обновлено {updated}, деактивировано {deactivated} тикеров')
 
     else:
-        print(f'Connection error.')
+        logger.error(f'Connection error.')
 
 
 if __name__ == '__main__':

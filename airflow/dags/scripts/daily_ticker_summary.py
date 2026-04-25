@@ -3,16 +3,21 @@ import yfinance as yf
 from sqlalchemy import select, join, func
 from sqlalchemy.dialects.postgresql import insert
 import datetime as dt
+import logging
 
 
 def load_daily_data():
+    logger = logging.getLogger(__name__)
     engine = get_engine()
 
     j = join(dim_companies, fact_stock_prices, dim_companies.c.ticker == fact_stock_prices.c.ticker, isouter=True)
     stmt = select(dim_companies.c.ticker, func.max(fact_stock_prices.c.date)).select_from(j).group_by(dim_companies.c.ticker)
 
     with engine.connect() as conn:
-        active_tickers = conn.execute(stmt)
+        cursor_active_tickers = conn.execute(stmt)
+
+    active_tickers = cursor_active_tickers.all()
+    logger.info(f'Получено {len(active_tickers)} активных тикеров из БД')
 
     download_batches = {}
 
@@ -26,8 +31,11 @@ def load_daily_data():
             download_batches[start_date] = []
         download_batches[start_date].append(ticker)
 
+    logger.info(f'Сформировано {len(download_batches)} батчей для загрузки')
+
     for start_date, tickers in download_batches.items():
         if start_date > dt.date.today():
+            logger.warning(f'Пустой датафрейм для батча {start_date}, тикеры: {tickers}')
             continue
 
         df = yf.download(
@@ -51,6 +59,7 @@ def load_daily_data():
             conn.execute(stmt)
             conn.commit()
 
+        logger.info(f'Загружено {len(data)} записей в fact_stock_prices')
 
 if __name__ == '__main__':
     load_daily_data()

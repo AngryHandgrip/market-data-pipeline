@@ -5,7 +5,7 @@ import os
 
 def get_engine():
     password = os.getenv('DB_PASSWORD')
-    return create_engine(f'postgresql://user:{password}@data-postgres:5432/market_db', echo=True)
+    return create_engine(f'postgresql://user:{password}@data-postgres:5432/market_db')
 
 metadata = MetaData(schema='market_data')
 
