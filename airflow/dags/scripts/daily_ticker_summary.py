@@ -37,13 +37,17 @@ def load_daily_data():
         if start_date > dt.date.today():
             logger.warning(f'Пустой датафрейм для батча {start_date}, тикеры: {tickers}')
             continue
-
-        df = yf.download(
-            tickers=' '.join(tickers), 
-            start=start_date, 
-            end=dt.date.today(),
-            group_by="ticker"
-        )
+        
+        try:
+            df = yf.download(
+                tickers=' '.join(tickers), 
+                start=start_date, 
+                end=dt.date.today(),
+                group_by="ticker"
+            )
+        except Exception as e:
+            logger.error(f'Ошибка загрузки данных для батча {start_date}: {e}')
+            continue
 
         if not df.empty:
             df_flat = df.stack(level=0).reset_index()
@@ -55,9 +59,12 @@ def load_daily_data():
             stmt = insert(fact_stock_prices).values(data)
             stmt = stmt.on_conflict_do_nothing(index_elements=['date', 'ticker'])
         
-        with engine.connect() as conn:
-            conn.execute(stmt)
-            conn.commit()
+            with engine.connect() as conn:
+                conn.execute(stmt)
+                conn.commit()
+        
+        else:
+            logger.warning(f'Пустой датафрейм для батча {start_date}, тикеры: {tickers}')
 
         logger.info(f'Загружено {len(data)} записей в fact_stock_prices')
 

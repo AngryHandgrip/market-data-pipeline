@@ -26,14 +26,20 @@ def load_montly_data():
     if response.status_code == 200:
         tables = pd.read_html(StringIO(response.text))
         df = tables[0]
-        index_tickers = df['Symbol'][:5]
+        index_tickers = df['Symbol']
         logger.info('Список тикеров из S&P500 получен')
         engine = get_engine()
 
         updated = 0
         for i, ticker in enumerate(index_tickers):
             logger.info(f'[{i + 1}/{len(index_tickers)}] Загрузка данных для {ticker}')
-            ticker_details = client.get_ticker_details(ticker)
+
+            try:
+                ticker_details = client.get_ticker_details(ticker)
+            except Exception as e:
+                logger.error(f'Ошибка получения данных для {ticker}: {e}')
+                continue
+
             start_time = time.time()
 
             address_dict = None
