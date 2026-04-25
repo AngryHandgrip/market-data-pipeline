@@ -15,7 +15,7 @@ default_args = {
 @dag(
     default_args=default_args,
     description='Load ticker trade info',
-    schedule='0 1 * * *',
+    schedule='0 2 * * *',
     catchup=False)
 def market_daily_quotes():
     @task()
