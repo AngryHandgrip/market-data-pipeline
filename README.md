@@ -1,27 +1,27 @@
-# Market Data Pipeline
+# Пайплайн рыночных данных
 
-An automated data pipeline for collecting and storing S&P 500 market data, built with Apache Airflow, PostgreSQL, and Docker.
+Автоматизированный пайплайн для сбора и хранения рыночных данных компаний S&P 500, построенный на Apache Airflow, PostgreSQL и Docker.
 
-## Overview
+## Обзор
 
-The pipeline runs two scheduled workflows:
+Пайплайн выполняет два процесса по расписанию:
 
-- **Daily** - downloads OHLCV stock price data for all S&P 500 companies via yfinance and stores it in a fact table
-- **Monthly** - fetches company metadata (name, industry, exchange, market cap, address) via the Polygon.io API and keeps a dimension table up to date, automatically deactivating tickers that have left the index
+- **Ежедневный** - загружает котировки OHLCV для всех компаний S&P 500 через yfinance и сохраняет их в таблицу фактов.
+- **Ежемесячный** - получает сведения о компаниях (название, отрасль, биржа, рыночная капитализация, адрес) через API Polygon.io и поддерживает актуальность таблицы измерений, автоматически деактивируя тикеры компаний, покинувших индекс.
 
-## Architecture
+## Архитектура
 
 ```mermaid
 flowchart LR
-    W([Wikipedia<br>S&P 500 list])
-    P([Polygon.io API<br>5 req/min])
+    W([Wikipedia<br>Список S&P 500])
+    P([API Polygon.io<br>5 запросов/мин])
     Y([yfinance])
     
-    subgraph monthly["first day of every month"]
+    subgraph monthly["Первое число каждого месяца"]
         LT[load_index_tickers.py]
     end
 
-    subgraph daily["daily 02:00 UTC"]
+    subgraph daily["Ежедневно в 02:00 UTC"]
         DS[daily_ticker_summary.py]
     end
 
@@ -30,55 +30,55 @@ flowchart LR
         FACT[(fact_stock_prices)]
     end
 
-    W -->|ticker list| LT
-    P -->|company metadata| LT
-    LT -->|upsert| DIM
-    DIM -->|active tickers| DS
-    Y -->|OHLCV batch download| DS
-    DS -->|upsert| FACT
+    W -->|список тикеров| LT
+    P -->|сведения о компаниях| LT
+    LT -->|UPSERT| DIM
+    DIM -->|активные тикеры| DS
+    Y -->|пакетная загрузка OHLCV| DS
+    DS -->|UPSERT| FACT
 ```
 
-Data is modelled as a simple star schema:
+Данные организованы в простую схему «звезда»:
 
-| Table | Description |
+| Таблица | Описание |
 |---|---|
-| `market_data.dim_companies` | Company metadata, one row per ticker |
-| `market_data.fact_stock_prices` | Daily OHLCV prices, one row per ticker per date |
+| `market_data.dim_companies` | Сведения о компаниях: одна строка на тикер |
+| `market_data.fact_stock_prices` | Ежедневные котировки OHLCV: одна строка на тикер и дату |
 
-Both tables support upserts - re-running any DAG is safe and will not produce duplicates.
+Обе таблицы поддерживают UPSERT - повторный запуск любого DAG безопасен и не создаёт дубликатов.
 
-## Architecture Decisions
+## Архитектурные решения
 
-**Two data sources for two different problems.** Polygon.io is used for company metadata: it provides accurate, licensed data. It is intentionally used with a rate limit of 5 requests/minute to simulate a bottleneck, a typical problem of real pipelines. yfinance is used for price history: downloading OHLCV data for the entire S&P 500 over a year would require 500 × 365 = 182,500 API calls with Polygon.io, which is impossible on the free tier. yfinance supports batch downloads and retrieves the full history in a handful of requests. The unofficial nature of yfinance is a known limitation acceptable for a portfolio project.
+**Два источника данных для двух разных задач.** Polygon.io используется для получения сведений о компаниях: он предоставляет точные данные на лицензионных условиях. Ограничение в 5 запросов в минуту применяется намеренно, чтобы смоделировать типичную проблему реальных пайплайнов: bottleneck. Для истории котировок используется yfinance: загрузка данных OHLCV для всех компаний S&P 500 за год потребовала бы 500 × 365 = 182 500 вызовов API Polygon.io, что невозможно на бесплатном тарифе. yfinance поддерживает пакетную загрузку и позволяет получить всю историю небольшим числом запросов. Неофициальный характер yfinance - известное ограничение, допустимое для проекта в портфолио.
 
-**Upserts over appends.** Both scripts use `INSERT ... ON CONFLICT DO UPDATE/NOTHING` instead of `to_sql(if_exists='append')`, making every DAG run idempotent.
+**UPSERT вместо добавления строк без проверки конфликтов.** Оба скрипта используют `INSERT ... ON CONFLICT DO UPDATE/NOTHING`, что делает каждый запуск DAG идемпотентным.
 
-## Stack
+## Стек
 
-- **Orchestration** - Apache Airflow 3
-- **Storage** - PostgreSQL 15
-- **Data** - yfinance, Polygon.io (`massive` SDK)
-- **Infrastructure** - Docker Compose
+- **Оркестрация** - Apache Airflow 3.
+- **Хранение** - PostgreSQL 15.
+- **Данные** - yfinance, Polygon.io (SDK `massive`).
+- **Инфраструктура** - Docker Compose.
 
-## Prerequisites
+## Требования
 
-- Docker and Docker Compose
-- Polygon.io API key (free tier is sufficient) - [get one here](https://polygon.io/)
+- Docker и Docker Compose.
+- API-ключ Polygon.io (достаточно бесплатного тарифа) - [получить ключ](https://polygon.io/).
 
-## Getting Started
+## Начало работы
 
-1. Clone the repository:
+1. Клонируйте репозиторий:
    ```bash
    git clone https://github.com/your_username/market-data-pipeline.git
    cd market-data-pipeline
    ```
 
-2. Create a `.env` file from the example:
+2. Создайте файл `.env` из примера:
    ```bash
    cp .env.example .env
    ```
 
-3. Fill in the required values in `.env`:
+3. Заполните необходимые значения в `.env`:
    ```
    AIRFLOW_UID=50000
    AIRFLOW_PROJ_DIR=./airflow
@@ -86,37 +86,37 @@ Both tables support upserts - re-running any DAG is safe and will not produce du
    MASSIVE_API_KEY=your_polygon_api_key
    ```
 
-4. Start all services:
+4. Запустите все сервисы:
    ```bash
    docker compose up -d
    ```
 
-5. Open the Airflow UI at [http://localhost:8080](http://localhost:8080) and log in with `airflow` / `airflow`.
+5. Откройте интерфейс Airflow по адресу [http://localhost:8080](http://localhost:8080) и войдите с логином `airflow` и паролем `airflow`.
 
-6. Enable the DAGs:
-   - `market_daily_quotes` - runs daily at 02:00 UTC
-   - `market_monthly_tickers` - runs on the 1st of each month at 00:00 UTC
+6. Включите DAG:
+   - `market_daily_quotes` - запускается ежедневно в 02:00 UTC.
+   - `market_monthly_tickers` - запускается первого числа каждого месяца в 00:00 UTC.
 
-The database is accessible on port `6432` for local clients (DBeaver, psql, etc.).
+База данных доступна локальным клиентам (DBeaver, psql и другим) на порту `6432`.
 
-## Project Structure
+## Структура проекта
 
 ```
 market-data-pipeline/
 ├── docker-compose.yml
-├── init.sql                        # Schema creation
+├── init.sql                        # Создание схемы
 ├── .env.example
 ├── airflow/
 │   └── dags/
-│       ├── market_data_pipeline.py # DAG definitions
+│       ├── market_data_pipeline.py # Определения DAG
 │       └── scripts/
-│           ├── db.py               # SQLAlchemy models and engine
-│           ├── load_index_tickers.py   # Monthly DAG logic
-│           └── daily_ticker_summary.py # Daily DAG logic
+│           ├── db.py               # Модели SQLAlchemy и движок подключения
+│           ├── load_index_tickers.py   # Логика ежемесячного DAG
+│           └── daily_ticker_summary.py # Логика ежедневного DAG
 ```
 
-## Known Limitations
+## Известные ограничения
 
-- yfinance relies on an unofficial Yahoo Finance API and may break without notice if Yahoo changes their endpoints
-- The Polygon.io free tier enforces a rate limit of 5 requests per minute; the monthly DAG respects this with a 12-second interval between requests
-- `fact_stock_prices` only includes trading days; weekends and market holidays produce no rows
+- yfinance использует неофициальный API Yahoo Finance и может перестать работать без предупреждения, если Yahoo изменит свои API-эндпоинты.
+- Бесплатный тариф Polygon.io ограничивает частоту обращений до 5 запросов в минуту; ежемесячный DAG учитывает это, выдерживая 12-секундный интервал между запросами.
+- `fact_stock_prices` содержит данные только за торговые дни; для выходных и биржевых праздников строки не создаются.
